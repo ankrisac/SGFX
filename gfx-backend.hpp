@@ -31,137 +31,12 @@ template<typename T> struct Color{
     }
 };
 
-namespace GW{
+namespace GL{
     void debug(std::string msg = "?"){
         static int i = 0;
 
         std::cout << "Error[" << i++ << "," << msg << "]: " << glewGetErrorString(glGetError()) << std::endl;
     }
-
-    class Context;
-    class Window{
-        SDL_Window* window;
-        SDL_GLContext context;
-    public:
-        struct Mode{
-            struct GLVersion{
-                unsigned int major;
-                unsigned int minor;
-            };
-
-            GLVersion version;
-            Color<unsigned int> colorResolution;
-            bool doubleBuffered;
-
-            Mode(GLVersion version = { 3, 3 }, Color<unsigned int> colorResolution = { 8, 8, 8, 8 }, bool doubleBuffered = true){
-                this->version = version;
-                this->colorResolution = colorResolution;
-                this->doubleBuffered = doubleBuffered;
-            }
-        };
-
-        Window(const std::string& title, unsigned int width, unsigned int height, Mode mode = Mode()){
-            SDL_GL_SetAttribute(SDL_GL_RED_SIZE, mode.colorResolution.r);
-            SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, mode.colorResolution.g);
-            SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, mode.colorResolution.b);
-            SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, mode.colorResolution.a);
-            SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, mode.colorResolution.sum());
-
-            SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, mode.doubleBuffered);
-            
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, mode.version.major);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, mode.version.minor);
-
-            window = SDL_CreateWindow(title.c_str(), 
-                SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-        }
-        ~Window(){
-            SDL_DestroyWindow(window);
-        }
-
-        Context* createContext();
-        SDL_Window* getRef(){
-            return window;
-        }
-        Uint32 getID(){
-            return SDL_GetWindowID(window);
-        }
-        void clear(float r = 0.0, float g = 0.0, float b = 0.0, float a = 1.0){
-            glClear(GL_COLOR_BUFFER_BIT);
-            glClearColor(r, g, b, a);
-        }
-        void update(){
-            SDL_GL_SwapWindow(window);
-        }
-
-        int getWidth(){
-            int width;
-            SDL_GetWindowSize(window, &width, NULL);
-            return width;
-        }
-        int getHeight(){
-            int height;
-            SDL_GetWindowSize(window, NULL, &height);
-            return height;
-        }
-
-        void setTitle(std::string title){
-            SDL_SetWindowTitle(window, title.c_str());  
-        }
-    };
-
-    class Context{
-        SDL_GLContext context;
-    public:
-        Context(Window* window){
-            context = SDL_GL_CreateContext(window->getRef());
-
-            glewExperimental = true;
-            GLenum status = glewInit();
-            if(status != GLEW_OK){
-                std::cout << "Error initializing GLEW : ";
-                std::cout << glewGetErrorString(status) << std::endl;
-            }
-        }
-        ~Context(){
-            SDL_GL_DeleteContext(context);
-        }
-
-        void bind(Window* window){
-            SDL_GL_MakeCurrent(window->getRef(), context);
-        }
-    };
-
-    Context* Window::createContext(){
-        return new Context(this);
-    }
-
-    class Input{
-        std::map<SDL_Keycode, bool> keyMap;
-    public:
-        void setKey(SDL_Keycode key, bool value){
-            keyMap[key] = value;
-        }
-        bool getKey(SDL_Keycode key) const {
-            auto it = keyMap.find(key);
-
-            if(it != keyMap.end()){
-                return it->second;
-            }
-            return false;
-        }
-        bool getKey(std::vector<SDL_Keycode> keys){
-            for(auto i: keys){
-                if(getKey(i)){
-                    return true;
-                }
-            }
-            return false;
-        }
-    };
-
-
 
     class GLObject{
     protected:
@@ -170,7 +45,9 @@ namespace GW{
         GLObject(){}
         virtual ~GLObject(){}
     public:
-        GLuint getRef() const{ return ref; }
+        GLuint getRef() const{ 
+            return ref; 
+        }
     };
 
     enum ShaderType{
@@ -194,18 +71,24 @@ namespace GW{
                 std::cout << getInfoLog() << std::endl;
             }
         }
-        ~SubShader(){ glDeleteShader(ref); }
+        ~SubShader(){ 
+            glDeleteShader(ref); 
+        }
 
-        ShaderType getType() const{ return type; }
+        ShaderType getType() const{ 
+            return type; 
+        }
 
         GLint getParameter(GLenum flag) const{
             GLint value;
             glGetShaderiv(ref, flag, &value);    
+            
             return value;
         }
         std::string getInfoLog() const{
             GLchar infoLog[1024];
             glGetShaderInfoLog(ref, sizeof(infoLog), NULL, infoLog);
+            
             return std::string(infoLog);
         }
         std::string getName() const{
@@ -240,14 +123,18 @@ namespace GW{
             glDeleteProgram(ref); 
         }
         
-        void bind(){ glUseProgram(ref); }
-        void unbind(){ glUseProgram(0); }
-
-        template<ShaderType type> void attach(const SubShader<type>* shader){
-            glAttachShader(ref, shader->getRef());
+        void bind(){ 
+            glUseProgram(ref); 
         }
-        template<ShaderType type> void detach(const SubShader<type>* shader){
-            glDetachShader(ref, shader->getRef());
+        void unbind(){ 
+            glUseProgram(0); 
+        }
+
+        template<ShaderType type> void attach(const SubShader<type>& shader){
+            glAttachShader(ref, shader.getRef());
+        }
+        template<ShaderType type> void detach(const SubShader<type>& shader){
+            glDetachShader(ref, shader.getRef());
         }
         void bindAttribute(unsigned int i, std::string name){
             glBindAttribLocation(ref, i, name.c_str());
@@ -318,17 +205,31 @@ namespace GW{
         size_t len;
         vbFormat format;
     public:
-        Buffer(){ glGenBuffers(1, &ref); }
-        ~Buffer(){ glDeleteBuffers(1, &ref); }
+        Buffer(){ 
+            glGenBuffers(1, &ref); 
+        }
+        ~Buffer(){ 
+            glDeleteBuffers(1, &ref); 
+        }
 
-        size_t getLen() const { return len; }
-        GLenum getType() const { return format.elementType; }
-        vbFormat getFormat() const { return format; }
+        size_t getLen() const{ 
+            return len; 
+        }
+        GLenum getType() const{
+            return format.elementType; 
+        }
+        vbFormat getFormat() const{ 
+            return format; 
+        }
 
-        void bind() const{ glBindBuffer(target, ref); }
-        void unbind() const { glBindBuffer(target, 0); }
+        void bind() const{ 
+            glBindBuffer(target, ref); 
+        }
+        void unbind() const { 
+            glBindBuffer(target, 0); 
+        }
         
-        template<typename T> void setData(std::vector<T> data, vbFormat format){
+        template<typename T> void setData(const std::vector<T>& data, const vbFormat format){
             this->len = data.size();
             this->format = format;
             
@@ -340,24 +241,34 @@ namespace GW{
     
     class VertexArray: public GLObject{
     public:
-        VertexArray(){ glGenVertexArrays(1, &ref); }
-        ~VertexArray(){ glDeleteVertexArrays(1, &ref); }
+        VertexArray(){ 
+            glGenVertexArrays(1, &ref); 
+        }
+        ~VertexArray(){ 
+            glDeleteVertexArrays(1, &ref); 
+        }
 
-        void bind() const{ glBindVertexArray(ref); }
-        void unbind() const{ glBindVertexArray(0); }
+        void bind() const{ 
+            glBindVertexArray(ref); 
+        }
+        void unbind() const{ 
+            glBindVertexArray(0); 
+        }
 
-        void draw(Buffer<INDEX>* eBuffer, GLenum mode = GL_TRIANGLES) const{
+        void draw(const Buffer<INDEX>& eBuffer, GLenum mode = GL_TRIANGLES) const{
             bind();
-            eBuffer->bind();
-            glDrawElements(mode, eBuffer->getLen(), GL_UNSIGNED_INT, 0);
+            eBuffer.bind();
+
+            glDrawElements(mode, eBuffer.getLen(), GL_UNSIGNED_INT, 0);
+            
             unbind();
         }
 
-        void bindAttribute(size_t i, Buffer<ATTRIBUTE>* vbuffer){
+        void bindAttribute(const size_t i, const Buffer<ATTRIBUTE>& vbuffer){
             bind();
-            vbuffer->bind();
+            vbuffer.bind();
 
-            auto fmt = vbuffer->getFormat();
+            auto fmt = vbuffer.getFormat();
 
             glEnableVertexAttribArray(i);
             glVertexAttribPointer(i, fmt.elementSize, fmt.elementType, 
